@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>탱크 격파 게임</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0d1117;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #game-container {
+            position: relative;
+            width: 960px;
+            height: 580px;
+            background: #000;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.8);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid #30363d;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 16px 20px;
+        }
+        .header-ui {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .player-card {
+            background: rgba(22, 27, 34, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(6px);
+            padding: 12px 16px;
+            border-radius: 10px;
+            width: 260px;
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .player-card.p1 { border-left: 5px solid #388bfd; }
+        .player-card.p2 { border-right: 5px solid #f85149; text-align: right; }
+        .player-name {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+        .bar-bg {
+            width: 100%;
+            height: 12px;
+            background: #21262d;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #30363d;
+            margin-bottom: 4px;
+        }
+        .bar-fill {
+            height: 100%;
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+        #p1-hp-fill { background: linear-gradient(90deg, #1f6feb, #388bfd); }
+        #p2-hp-fill { background: linear-gradient(90deg, #da3633, #f85149); }
+        #p1-move-fill { background: linear-gradient(90deg, #2ea043, #3fb950); }
+        #p2-move-fill { background: linear-gradient(90deg, #d29922, #e3b341); }
+
+        .stats-info {
+            font-size: 12px;
+            color: #8b949e;
+            display: flex;
+            justify-content: space-between;
+            margin-top: 4px;
+        }
+
+        #stage-badge {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(22, 27, 34, 0.9);
+            border: 1px solid #388bfd;
+            color: #58a6ff;
+            padding: 4px 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        #turn-badge {
+            background: rgba(13, 17, 23, 0.9);
+            color: #f2cc60;
+            padding: 10px 24px;
+            border-radius: 20px;
+            font-size: 17px;
+            font-weight: 800;
+            border: 2px solid #f2cc60;
+            letter-spacing: 1px;
+            box-shadow: 0 0 15px rgba(242, 204, 96, 0.3);
+            text-shadow: 0 0 5px rgba(0,0,0,0.5);
+            margin-top: 26px;
+        }
+
+        .controls-hint {
+            background: rgba(13, 17, 23, 0.85);
+            color: #c9d1d9;
+            font-size: 13px;
+            padding: 10px 20px;
+            border-radius: 8px;
+            align-self: center;
+            border: 1px solid #30363d;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .modal-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        .modal-title {
+            font-size: 48px;
+            font-weight: 900;
+            color: #fff;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+        }
+        .modal-desc {
+            color: #8b949e;
+            font-size: 15px;
+            margin-bottom: 30px;
+            text-align: center;
+            line-height: 1.6;
+        }
+        .action-btn {
+            padding: 14px 38px;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            background: #238636;
+            border: 1px solid rgba(240,246,252,0.1);
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(35, 134, 54, 0.4);
+            transition: all 0.2s;
+            pointer-events: auto;
+        }
+        .action-btn:hover {
+            background: #2ea043;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(46, 160, 67, 0.6);
+        }
+
+        /* 터치 컨트롤 패널 스타일 */
+        #touch-controls {
+            position: absolute;
+            bottom: 12px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 16px;
+            pointer-events: auto;
+            z-index: 5;
+        }
+
+        .touch-group {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            background: rgba(13, 17, 23, 0.75);
+            padding: 6px 10px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(4px);
+        }
+
+        .touch-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: manipulation;
+            user-select: none;
+            cursor: pointer;
+            transition: background 0.1s, transform 0.1s;
+        }
+
+        .touch-btn:active {
+            background: #30363d;
+            transform: scale(0.95);
+        }
+
+        .touch-btn.fire-btn {
+            width: 70px;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .touch-btn.p1-fire {
+            background: #1f6feb;
+            border-color: #388bfd;
+        }
+
+        .touch-btn.p2-fire {
+            background: #da3633;
+            border-color: #f85149;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="960" height="580"></canvas>
+
+    <div id="ui-overlay">
+        <div class="header-ui">
+            <!-- 플레이어 상태 카드 -->
+            <div class="player-card p1">
+                <div class="player-name">플레이어 1 (파랑)</div>
+                <div class="bar-bg">
+                    <div id="p1-hp-fill" class="bar-fill"></div>
+                </div>
+                <div class="bar-bg" style="height: 6px;">
+                    <div id="p1-move-fill" class="bar-fill"></div>
+                </div>
+                <div class="stats-info">
+                    <span>HP: <b id="p1-hp-text">100</b></span>
+                    <span>이동력: <b id="p1-move-text">100</b>%</span>
+                    <span>각도: <b id="p1-angle">45</b>°</span>
+                </div>
+            </div>
+
+            <div id="turn-badge">P1 턴</div>
+
+            <div id="stage-badge">2 PLAYER MODE</div>
+
+            <!-- 플레이어 2 상태 카드 -->
+            <div class="player-card p2">
+                <div class="player-name" id="p2-name">플레이어 2 (빨강)</div>
+                <div class="bar-bg">
+                    <div id="p2-hp-fill" class="bar-fill"></div>
+                </div>
+                <div class="bar-bg" style="height: 6px;">
+                    <div id="p2-move-fill" class="bar-fill"></div>
+                </div>
+                <div class="stats-info">
+                    <span>각도: <b id="p2-angle">45</b>°</span>
+                    <span>이동력: <b id="p2-move-text">100</b>%</span>
+                    <span>HP: <b id="p2-hp-text">100</b></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls-hint">
+            <b>[P1] ◄/► 이동 | ▲/▼ 각도 | [Space] 발사</b> &nbsp;||&nbsp; <b>[P2] A/D 이동 | W/S 각도 | [Shift] 발사</b> | <b>[P] 일시정지</b>
+        </div>
+
+        <!-- 하단 터치 버튼 UI 추가 -->
+        <div id="touch-controls">
+            <!-- P1 터치 버튼 -->
+            <div class="touch-group">
+                <button class="touch-btn" id="btn-p1-left">◄</button>
+                <button class="touch-btn" id="btn-p1-right">►</button>
+                <button class="touch-btn" id="btn-p1-up">▲</button>
+                <button class="touch-btn" id="btn-p1-down">▼</button>
+                <button class="touch-btn fire-btn p1-fire" id="btn-p1-fire">P1 발사</button>
+            </div>
+
+            <!-- P2 터치 버튼 -->
+            <div class="touch-group">
+                <button class="touch-btn fire-btn p2-fire" id="btn-p2-fire">P2 발사</button>
+                <button class="touch-btn" id="btn-p2-up">▲</button>
+                <button class="touch-btn" id="btn-p2-down">▼</button>
+                <button class="touch-btn" id="btn-p2-left">◄</button>
+                <button class="touch-btn" id="btn-p2-right">►</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 시작 화면 -->
+    <div id="start-screen" class="modal-screen">
+        <h1 class="modal-title" style="color: #388bfd;">2인용 탱크 격파 게임</h1>
+        <p class="modal-desc">
+            <b>P1:</b> [◄/►] 이동, [▲/▼] 각도 조절, [Space] 파워 차징/발사<br>
+            <b>P2:</b> [A/D] 이동, [W/S] 각도 조절, [Left Shift] 파워 차징/발사<br>
+            포물선 조준선을 활용해 상대 탱크를 먼저 격파하세요!
+        </p>
+        <button id="start-btn" class="action-btn">게임 시작하기</button>
+    </div>
+
+    <!-- 일시정지 화면 -->
+    <div id="pause-screen" class="modal-screen hidden">
+        <h1 class="modal-title" style="color: #f2cc60;">일시 정지</h1>
+        <p class="modal-desc">게임을 계속하려면 아래 버튼을 누르거나 [P] 키를 누르세요.</p>
+        <button id="resume-btn" class="action-btn" style="background: #1f6feb;">계속하기</button>
+    </div>
+
+    <!-- 승패 결과 화면 -->
+    <div id="result-screen" class="modal-screen hidden">
+        <h1 id="result-title" class="modal-title">승리!</h1>
+        <p id="result-desc" class="modal-desc">상대 탱크를 격파했습니다.</p>
+        <button id="restart-btn" class="action-btn" style="background: #238636;">다시 시작하기</button>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const WIDTH = canvas.width;
+const HEIGHT = canvas.height;
+const GRAVITY = 0.22;
+const MAX_MOVE_ENERGY = 100;
+
+let gameState = 'START'; // 'START', 'PLAYING', 'PAUSED', 'GAMEOVER'
+let currentTurn = 'PLAYER1'; // 'PLAYER1', 'PLAYER2', 'FIRING'
+
+const keys = {};
+let spaceHoldStart = 0;
+let isChargingP1 = false;
+
+let shiftHoldStart = 0;
+let isChargingP2 = false;
+
+let playerTank, enemyTank;
+let activeMissile = null;
+let terrain = [];
+let particles = [];
+
+// 지형 생성
+function generateTerrain() {
+    terrain = new Float32Array(WIDTH);
+    let baseHeight = HEIGHT * 0.72;
+    for (let x = 0; x < WIDTH; x++) {
+        terrain[x] = baseHeight 
+            + Math.sin(x * 0.007) * 45 
+            + Math.cos(x * 0.018) * 20;
+    }
+}
+
+function getTerrainY(x) {
+    let clampX = Math.max(0, Math.min(WIDTH - 1, Math.floor(x)));
+    return terrain[clampX];
+}
+
+function destroyTerrain(impactX, impactY, radius) {
+    let startX = Math.max(0, Math.floor(impactX - radius));
+    let endX = Math.min(WIDTH - 1, Math.ceil(impactX + radius));
+
+    for (let x = startX; x <= endX; x++) {
+        let dx = x - impactX;
+        let dySq = radius * radius - dx * dx;
+        if (dySq > 0) {
+            let craterDepth = Math.sqrt(dySq);
+            terrain[x] = Math.min(HEIGHT - 10, Math.max(terrain[x], impactY + craterDepth));
+        }
+    }
+}
+
+function createExplosion(x, y) {
+    for (let i = 0; i < 35; i++) {
+        let angle = Math.random() * Math.PI * 2;
+        let speed = Math.random() * 6 + 1;
+        particles.push({
+            x: x,
+            y: y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 1,
+            life: 1.0,
+            decay: Math.random() * 0.03 + 0.015,
+            radius: Math.random() * 4 + 2,
+            color: ['#ff4d4d', '#ffa64d', '#ffff66', '#888888'][Math.floor(Math.random() * 4)]
+        });
+    }
+}
+
+class Tank {
+    constructor(x, isPlayer1, maxHp = 100) {
+        this.x = x;
+        this.isPlayer1 = isPlayer1;
+        this.width = 36;
+        this.height = 18;
+        this.maxHp = maxHp;
+        this.hp = maxHp;
+        this.moveEnergy = MAX_MOVE_ENERGY;
+        this.angle = 45;
+        this.barrelLength = 24;
+        this.trackOffset = 0;
+        this.updatePosition();
+    }
+
+    updatePosition() {
+        this.y = getTerrainY(this.x);
+    }
+
+    resetTurnEnergy() {
+        this.moveEnergy = MAX_MOVE_ENERGY;
+    }
+
+    move(dir) {
+        if (this.moveEnergy <= 0) return;
+
+        let speed = 1.6;
+        let nextX = this.x + dir * speed;
+        let minX = this.isPlayer1 ? 30 : WIDTH / 2 + 40;
+        let maxX = this.isPlayer1 ? WIDTH / 2 - 40 : WIDTH - 30;
+
+        if (nextX >= minX && nextX <= maxX) {
+            this.x = nextX;
+            this.updatePosition();
+            this.moveEnergy = Math.max(0, this.moveEnergy - 0.6);
+            this.trackOffset += dir * 2.5;
+        }
+    }
+
+    getMuzzlePosition() {
+        let rad = (this.angle * Math.PI) / 180;
+        let dir = this.isPlayer1 ? 1 : -1;
+        return {
+            x: this.x + Math.cos(rad) * this.barrelLength * dir,
+            y: (this.y - 12) - Math.sin(rad) * this.barrelLength
+        };
+    }
+
+    drawTrajectory(power) {
+        let muzzle = this.getMuzzlePosition();
+        let rad = (this.angle * Math.PI) / 180;
+        let dir = this.isPlayer1 ? 1 : -1;
+        let speed = power * 0.22;
+
+        let simX = muzzle.x;
+        let simY = muzzle.y;
+        let simVx = Math.cos(rad) * speed * dir;
+        let simVy = -Math.sin(rad) * speed;
+
+        ctx.save();
+        ctx.strokeStyle = this.isPlayer1 ? 'rgba(56, 139, 253, 0.7)' : 'rgba(248, 81, 73, 0.7)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+
+        ctx.beginPath();
+        ctx.moveTo(simX, simY);
+
+        for (let t = 0; t < 120; t++) {
+            simVy += GRAVITY;
+            simX += simVx;
+            simY += simVy;
+
+            ctx.lineTo(simX, simY);
+
+            if (simX < 0 || simX > WIDTH || simY >= getTerrainY(simX)) {
+                break;
+            }
+        }
+
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+        ctx.fillStyle = this.isPlayer1 ? '#388bfd' : '#f85149';
+        ctx.beginPath();
+        ctx.arc(simX, simY, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    draw() {
+        let muzzle = this.getMuzzlePosition();
+        ctx.strokeStyle = '#2d3748';
+        ctx.lineWidth = 6;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y - 12);
+        ctx.lineTo(muzzle.x, muzzle.y);
+        ctx.stroke();
+
+        ctx.strokeStyle = this.isPlayer1 ? '#388bfd' : '#f85149';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y - 12);
+        ctx.lineTo(muzzle.x, muzzle.y);
+        ctx.stroke();
+
+        let mainGrad = ctx.createLinearGradient(this.x - this.width/2, this.y - this.height, this.x + this.width/2, this.y);
+        if (this.isPlayer1) {
+            mainGrad.addColorStop(0, '#3182ce');
+            mainGrad.addColorStop(1, '#1a365d');
+        } else {
+            mainGrad.addColorStop(0, '#e53e3e');
+            mainGrad.addColorStop(1, '#742a2a');
+        }
+
+        ctx.fillStyle = mainGrad;
+        ctx.beginPath();
+        ctx.roundRect(this.x - this.width / 2, this.y - this.height, this.width, this.height - 4, 4);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = this.isPlayer1 ? '#2b6cb0' : '#c53030';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y - 12, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(this.x - this.width / 2 - 2, this.y - 5, this.width + 4, 7);
+
+        ctx.fillStyle = '#a0aec0';
+        let numWheels = 4;
+        let wheelSpacing = this.width / (numWheels - 1);
+        for (let i = 0; i < numWheels; i++) {
+            let wx = (this.x - this.width / 2) + i * wheelSpacing;
+            let wy = this.y - 2;
+            ctx.beginPath();
+            ctx.arc(wx, wy, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = '#4a5568';
+            ctx.lineWidth = 1;
+            let lineAngle = (this.trackOffset * 0.1) + i;
+            ctx.beginPath();
+            ctx.moveTo(wx, wy);
+            ctx.lineTo(wx + Math.cos(lineAngle) * 3, wy + Math.sin(lineAngle) * 3);
+            ctx.stroke();
+        }
+    }
+}
+
+class Missile {
+    constructor(x, y, vx, vy, owner) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.owner = owner;
+        this.active = true;
+        this.radius = 4;
+        this.trail = [];
+    }
+
+    update() {
+        if (!this.active) return;
+
+        this.trail.push({ x: this.x, y: this.y });
+        if (this.trail.length > 12) this.trail.shift();
+
+        this.vy += GRAVITY;
+        this.x += this.vx;
+        this.y += this.vy;
+
+        if (this.x < 0 || this.x > WIDTH || this.y > HEIGHT + 100) {
+            this.explode(false, this.x, this.y);
+            return;
+        }
+
+        if (this.y >= getTerrainY(this.x)) {
+            this.explode(true, this.x, this.y);
+            return;
+        }
+
+        let targets = [playerTank, enemyTank];
+        for (let tank of targets) {
+            let dist = Math.hypot(this.x - tank.x, this.y - (tank.y - 8));
+            if (dist < 18) {
+                this.explode(true, this.x, this.y);
+                return;
+            }
+        }
+    }
+
+    explode(hit, ex, ey) {
+        this.active = false;
+        let shooter = this.owner;
+        activeMissile = null;
+
+        if (hit) {
+            let explosionRadius = 38;
+            createExplosion(ex, ey);
+            destroyTerrain(ex, ey, explosionRadius);
+
+            let targets = [playerTank, enemyTank];
+            targets.forEach(tank => {
+                let dist = Math.hypot(ex - tank.x, ey - (tank.y - 8));
+                if (dist < explosionRadius + 15) {
+                    let damage = Math.round((1 - dist / (explosionRadius + 15)) * 38);
+                    damage = Math.max(10, damage);
+                    tank.hp = Math.max(0, tank.hp - damage);
+                }
+            });
+        }
+
+        checkGameOver();
+
+        if (gameState === 'PLAYING') {
+            setTimeout(() => {
+                nextTurn(shooter);
+            }, 600);
+        }
+    }
+
+    draw() {
+        if (!this.active) return;
+
+        for (let i = 0; i < this.trail.length; i++) {
+            let p = this.trail[i];
+            let alpha = (i + 1) / this.trail.length;
+            ctx.fillStyle = `rgba(246, 173, 85, ${alpha * 0.6})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, (i + 1) * 0.3 + 1, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.fillStyle = '#f6ad55';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+function initGame() {
+    generateTerrain();
+
+    playerTank = new Tank(160, true, 100);
+    enemyTank = new Tank(800, false, 100);
+    activeMissile = null;
+    particles = [];
+    currentTurn = 'PLAYER1';
+    gameState = 'PLAYING';
+
+    playerTank.resetTurnEnergy();
+    enemyTank.resetTurnEnergy();
+
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('pause-screen').classList.add('hidden');
+    document.getElementById('result-screen').classList.add('hidden');
+    updateUI();
+}
+
+function fireMissile(tank, angle, power, ownerTag) {
+    if (currentTurn === 'FIRING') return;
+    currentTurn = 'FIRING';
+
+    let muzzle = tank.getMuzzlePosition();
+    let rad = (angle * Math.PI) / 180;
+    let dir = tank.isPlayer1 ? 1 : -1;
+    let speed = power * 0.22;
+
+    let vx = Math.cos(rad) * speed * dir;
+    let vy = -Math.sin(rad) * speed;
+
+    activeMissile = new Missile(muzzle.x, muzzle.y, vx, vy, ownerTag);
+}
+
+function nextTurn(lastShooter) {
+    if (gameState !== 'PLAYING') return;
+
+    if (lastShooter === 'PLAYER1') {
+        currentTurn = 'PLAYER2';
+        enemyTank.resetTurnEnergy();
+    } else {
+        currentTurn = 'PLAYER1';
+        playerTank.resetTurnEnergy();
+    }
+    updateUI();
+}
+
+function checkGameOver() {
+    if (playerTank.hp <= 0 || enemyTank.hp <= 0) {
+        gameState = 'GAMEOVER';
+        let resultTitle = document.getElementById('result-title');
+        let resultDesc = document.getElementById('result-desc');
+        let resultScreen = document.getElementById('result-screen');
+
+        if (enemyTank.hp <= 0 && playerTank.hp > 0) {
+            resultTitle.innerText = "플레이어 1 (파랑) 승리!";
+            resultTitle.style.color = "#388bfd";
+            resultDesc.innerText = "플레이어 2 탱크를 격파했습니다!";
+        } else if (playerTank.hp <= 0 && enemyTank.hp > 0) {
+            resultTitle.innerText = "플레이어 2 (빨강) 승리!";
+            resultTitle.style.color = "#f85149";
+            resultDesc.innerText = "플레이어 1 탱크를 격파했습니다!";
+        } else {
+            resultTitle.innerText = "무승부!";
+            resultTitle.style.color = "#f2cc60";
+            resultDesc.innerText = "두 탱크가 동시에 파괴되었습니다!";
+        }
+
+        resultScreen.classList.remove('hidden');
+    }
+}
+
+function updateUI() {
+    document.getElementById('p1-hp-fill').style.width = Math.max(0, (playerTank.hp / playerTank.maxHp) * 100) + '%';
+    document.getElementById('p2-hp-fill').style.width = Math.max(0, (enemyTank.hp / enemyTank.maxHp) * 100) + '%';
+    document.getElementById('p1-move-fill').style.width = playerTank.moveEnergy + '%';
+    document.getElementById('p2-move-fill').style.width = enemyTank.moveEnergy + '%';
+
+    document.getElementById('p1-hp-text').innerText = playerTank.hp;
+    document.getElementById('p2-hp-text').innerText = enemyTank.hp;
+    document.getElementById('p1-move-text').innerText = Math.round(playerTank.moveEnergy);
+    document.getElementById('p2-move-text').innerText = Math.round(enemyTank.moveEnergy);
+
+    document.getElementById('p1-angle').innerText = Math.round(playerTank.angle);
+    document.getElementById('p2-angle').innerText = Math.round(enemyTank.angle);
+
+    let badge = document.getElementById('turn-badge');
+    if (currentTurn === 'PLAYER1') {
+        badge.innerText = 'P1 턴 (파랑)';
+        badge.style.color = '#388bfd';
+        badge.style.borderColor = '#388bfd';
+    } else if (currentTurn === 'PLAYER2') {
+        badge.innerText = 'P2 턴 (빨강)';
+        badge.style.color = '#f85149';
+        badge.style.borderColor = '#f85149';
+    }
+}
+
+function togglePause() {
+    if (gameState === 'PLAYING') {
+        gameState = 'PAUSED';
+        document.getElementById('pause-screen').classList.remove('hidden');
+    } else if (gameState === 'PAUSED') {
+        gameState = 'PLAYING';
+        document.getElementById('pause-screen').classList.add('hidden');
+    }
+}
+
+function handleInput() {
+    if (gameState !== 'PLAYING') return;
+
+    // Player 1 조작 (방향키)
+    if (currentTurn === 'PLAYER1') {
+        if (keys['ArrowLeft']) playerTank.move(-1);
+        if (keys['ArrowRight']) playerTank.move(1);
+        if (keys['ArrowUp']) playerTank.angle = Math.min(85, playerTank.angle + 1);
+        if (keys['ArrowDown']) playerTank.angle = Math.max(5, playerTank.angle - 1);
+    }
+
+    // Player 2 조작 (WASD)
+    if (currentTurn === 'PLAYER2') {
+        if (keys['KeyA']) enemyTank.move(-1);
+        if (keys['KeyD']) enemyTank.move(1);
+        if (keys['KeyW']) enemyTank.angle = Math.min(85, enemyTank.angle + 1);
+        if (keys['KeyS']) enemyTank.angle = Math.max(5, enemyTank.angle - 1);
+    }
+
+    updateUI();
+}
+
+window.addEventListener('keydown', e => {
+    if (e.code === 'KeyP' && (gameState === 'PLAYING' || gameState === 'PAUSED')) {
+        togglePause();
+        return;
+    }
+
+    keys[e.code] = true;
+
+    // Player 1 차징 (Space)
+    if (e.code === 'Space' && !e.repeat && currentTurn === 'PLAYER1' && gameState === 'PLAYING') {
+        isChargingP1 = true;
+        spaceHoldStart = Date.now();
+    }
+
+    // Player 2 차징 (ShiftLeft / ShiftRight)
+    if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && !e.repeat && currentTurn === 'PLAYER2' && gameState === 'PLAYING') {
+        isChargingP2 = true;
+        shiftHoldStart = Date.now();
+    }
+});
+
+window.addEventListener('keyup', e => {
+    keys[e.code] = false;
+
+    // Player 1 발사
+    if (e.code === 'Space' && isChargingP1 && currentTurn === 'PLAYER1' && gameState === 'PLAYING') {
+        isChargingP1 = false;
+        let duration = Date.now() - spaceHoldStart;
+        let power = Math.min(100, (duration / 2500) * 100);
+        fireMissile(playerTank, playerTank.angle, power, 'PLAYER1');
+    }
+
+    // Player 2 발사
+    if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && isChargingP2 && currentTurn === 'PLAYER2' && gameState === 'PLAYING') {
+        isChargingP2 = false;
+        let duration = Date.now() - shiftHoldStart;
+        let power = Math.min(100, (duration / 2500) * 100);
+        fireMissile(enemyTank, enemyTank.angle, power, 'PLAYER2');
+    }
+});
+
+// 터치 / 마우스 이벤트 연동 바인딩
+function setupTouchEvents() {
+    const bindBtn = (id, keyCode) => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+
+        const startAction = (e) => {
+            e.preventDefault();
+            keys[keyCode] = true;
+
+            if (keyCode === 'Space' && currentTurn === 'PLAYER1' && gameState === 'PLAYING' && !isChargingP1) {
+                isChargingP1 = true;
+                spaceHoldStart = Date.now();
+            }
+            if (keyCode === 'ShiftLeft' && currentTurn === 'PLAYER2' && gameState === 'PLAYING' && !isChargingP2) {
+                isChargingP2 = true;
+                shiftHoldStart = Date.now();
+            }
+        };
+
+        const endAction = (e) => {
+            e.preventDefault();
+            keys[keyCode] = false;
+
+            if (keyCode === 'Space' && isChargingP1 && currentTurn === 'PLAYER1' && gameState === 'PLAYING') {
+                isChargingP1 = false;
+                let duration = Date.now() - spaceHoldStart;
+                let power = Math.min(100, (duration / 2500) * 100);
+                fireMissile(playerTank, playerTank.angle, power, 'PLAYER1');
+            }
+            if (keyCode === 'ShiftLeft' && isChargingP2 && currentTurn === 'PLAYER2' && gameState === 'PLAYING') {
+                isChargingP2 = false;
+                let duration = Date.now() - shiftHoldStart;
+                let power = Math.min(100, (duration / 2500) * 100);
+                fireMissile(enemyTank, enemyTank.angle, power, 'PLAYER2');
+            }
+        };
+
+        btn.addEventListener('touchstart', startAction, { passive: false });
+        btn.addEventListener('touchend', endAction, { passive: false });
+        btn.addEventListener('mousedown', startAction);
+        btn.addEventListener('mouseup', endAction);
+        btn.addEventListener('mouseleave', endAction);
+    };
+
+    // P1 터치 버튼 바인딩
+    bindBtn('btn-p1-left', 'ArrowLeft');
+    bindBtn('btn-p1-right', 'ArrowRight');
+    bindBtn('btn-p1-up', 'ArrowUp');
+    bindBtn('btn-p1-down', 'ArrowDown');
+    bindBtn('btn-p1-fire', 'Space');
+
+    // P2 터치 버튼 바인딩
+    bindBtn('btn-p2-left', 'KeyA');
+    bindBtn('btn-p2-right', 'KeyD');
+    bindBtn('btn-p2-up', 'KeyW');
+    bindBtn('btn-p2-down', 'KeyS');
+    bindBtn('btn-p2-fire', 'ShiftLeft');
+}
+
+setupTouchEvents();
+
+document.getElementById('start-btn').addEventListener('click', () => initGame());
+document.getElementById('resume-btn').addEventListener('click', togglePause);
+document.getElementById('restart-btn').addEventListener('click', () => initGame());
+
+function render() {
+    if (gameState === 'PLAYING') {
+        handleInput();
+
+        if (activeMissile) {
+            activeMissile.update();
+        }
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life -= p.decay;
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+    }
+
+    let skyGradient = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+    skyGradient.addColorStop(0, '#0d1117');
+    skyGradient.addColorStop(0.6, '#161b22');
+    skyGradient.addColorStop(1, '#21262d');
+    ctx.fillStyle = skyGradient;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    ctx.fillStyle = '#2d1a0e';
+    ctx.beginPath();
+    ctx.moveTo(0, HEIGHT);
+    for (let x = 0; x < WIDTH; x++) {
+        ctx.lineTo(x, terrain[x]);
+    }
+    ctx.lineTo(WIDTH, HEIGHT);
+    ctx.fill();
+
+    ctx.strokeStyle = '#3d2514';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(0, terrain[0]);
+    for (let x = 1; x < WIDTH; x++) {
+        ctx.lineTo(x, terrain[x]);
+    }
+    ctx.stroke();
+
+    if (playerTank) playerTank.draw();
+    if (enemyTank) enemyTank.draw();
+    if (activeMissile) activeMissile.draw();
+
+    // 조준 포물선 가이드 라인 그리기
+    if (gameState === 'PLAYING') {
+        if (currentTurn === 'PLAYER1') {
+            let power = 50;
+            if (isChargingP1) {
+                let holdDuration = Date.now() - spaceHoldStart;
+                power = Math.min(100, (holdDuration / 2500) * 100);
+            }
+            playerTank.drawTrajectory(power);
+        } else if (currentTurn === 'PLAYER2') {
+            let power = 50;
+            if (isChargingP2) {
+                let holdDuration = Date.now() - shiftHoldStart;
+                power = Math.min(100, (holdDuration / 2500) * 100);
+            }
+            enemyTank.drawTrajectory(power);
+        }
+    }
+
+    particles.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+    });
+
+    // P1 차징 바
+    if (isChargingP1 && currentTurn === 'PLAYER1' && gameState === 'PLAYING') {
+        let holdDuration = Date.now() - spaceHoldStart;
+        let power = Math.min(100, (holdDuration / 2500) * 100);
+
+        let barW = 54;
+        let barH = 8;
+        let barX = playerTank.x - barW / 2;
+        let barY = playerTank.y - 40;
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(barX, barY, barW, barH);
+
+        ctx.fillStyle = '#388bfd';
+        ctx.fillRect(barX, barY, (barW * power) / 100, barH);
+
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barX, barY, barW, barH);
+    }
+
+    // P2 차징 바
+    if (isChargingP2 && currentTurn === 'PLAYER2' && gameState === 'PLAYING') {
+        let holdDuration = Date.now() - shiftHoldStart;
+        let power = Math.min(100, (holdDuration / 2500) * 100);
+
+        let barW = 54;
+        let barH = 8;
+        let barX = enemyTank.x - barW / 2;
+        let barY = enemyTank.y - 40;
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(barX, barY, barW, barH);
+
+        ctx.fillStyle = '#f85149';
+        ctx.fillRect(barX, barY, (barW * power) / 100, barH);
+
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barX, barY, barW, barH);
+    }
+
+    requestAnimationFrame(render);
+}
+
+generateTerrain();
+playerTank = new Tank(160, true);
+enemyTank = new Tank(800, false);
+render();
+</script>
+</body>
+</html>
